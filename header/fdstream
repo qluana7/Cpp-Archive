@@ -1,0 +1,135 @@
+#pragma once
+
+#include <fstream>
+
+#include <ext/stdio_filebuf.h>
+
+namespace std {
+    template <typename _CharT, typename _Traits = char_traits<_CharT>>
+    class basic_ifdstream;
+
+    template <typename _CharT, typename _Traits = char_traits<_CharT>>
+    class basic_ofdstream;
+
+    typedef basic_ifdstream<char> ifdstream;
+    typedef basic_ofdstream<char> ofdstream;
+
+template <typename _CharT, typename _Traits>
+class basic_ifdstream : public basic_istream<_CharT, _Traits> {
+public:
+    typedef _CharT  char_type;
+    typedef _Traits traits_type;
+    typedef typename traits_type::int_type int_type;
+    typedef typename traits_type::pos_type pos_type;
+    typedef typename traits_type::off_type off_type;
+
+    typedef __gnu_cxx::stdio_filebuf<_CharT, _Traits> __filebuf_type;
+    typedef basic_istream<_CharT, _Traits>            __istream_type;
+
+private:
+    __filebuf_type _M_filebuf;
+
+public:
+/*
+    basic_ifdstream() : __istream_type, _M_filebuf()
+    { this->init(&_M_filebuf); }
+*/
+
+    explicit
+    basic_ifdstream(int __fd, ios_base::openmode __mode = ios_base::in)
+    : __istream_type(), _M_filebuf(__fd, __mode) { this->init(&_M_filebuf); }
+
+    basic_ifdstream(const basic_ifdstream&) = delete;
+
+    basic_ifdstream(basic_ifdstream&& __rhs)
+    : __istream_type(std::move(__rhs)), _M_filebuf(std::move(__rhs._M_filebuf))
+    { __istream_type::set_rdbuf(&_M_filebuf); }
+
+    ~basic_ifdstream() { }
+
+    basic_ifdstream& operator=(const basic_ifdstream&) = delete;
+
+    basic_ifdstream& operator=(basic_ifdstream&& __rhs) {
+        __istream_type::operator=(std::move(__rhs));
+        _M_filebuf = std::move(__rhs._M_filebuf);
+        return *this;
+    }
+
+    void swap(basic_ifdstream& __rhs) {
+        __istream_type::swap(__rhs);
+        _M_filebuf.swap(__rhs._M_filebuf);
+    }
+
+    __filebuf_type* rdbuf() const
+    { return const_cast<__filebuf_type*>(&_M_filebuf); }
+
+    bool is_open()
+    { return _M_filebuf.is_open(); }
+
+    int fd()
+    { return _M_filebuf.fd(); }
+
+    std::__c_file* file()
+    { return _M_filebuf.file(); }
+};
+
+template <typename _CharT, typename _Traits>
+class basic_ofdstream : public basic_ostream<_CharT, _Traits> {
+public:
+    typedef _CharT  char_type;
+    typedef _Traits traits_type;
+    typedef typename traits_type::int_type int_type;
+    typedef typename traits_type::pos_type pos_type;
+    typedef typename traits_type::off_type off_type;
+
+    typedef __gnu_cxx::stdio_filebuf<_CharT, _Traits> __filebuf_type;
+    typedef basic_ostream<_CharT, _Traits>            __ostream_type;
+
+private:
+    __filebuf_type _M_filebuf;
+
+public:
+/*
+    basic_ofdstream() : __ostream_type, _M_filebuf()
+    { this->init(&_M_filebuf); }
+*/
+
+    explicit
+    basic_ofdstream(int __fd, ios_base::openmode __mode = ios_base::out)
+    : __ostream_type(), _M_filebuf(__fd, __mode) { this->init(&_M_filebuf); }
+
+    basic_ofdstream(const basic_ofdstream&) = delete;
+
+    basic_ofdstream(basic_ofdstream&& __rhs)
+    : __ostream_type(std::move(__rhs)), _M_filebuf(std::move(__rhs._M_filebuf))
+    { __ostream_type::set_rdbuf(&_M_filebuf); }
+
+    ~basic_ofdstream() { }
+
+    basic_ofdstream& operator=(const basic_ofdstream&) = delete;
+
+    basic_ofdstream& operator=(basic_ofdstream&& __rhs) {
+        __ostream_type::operator=(std::move(__rhs));
+        _M_filebuf = std::move(__rhs._M_filebuf);
+        return *this;
+    }
+
+    void swap(basic_ofdstream& __rhs) {
+        __ostream_type::swap(__rhs);
+        _M_filebuf.swap(__rhs._M_filebuf);
+    }
+
+    __filebuf_type* rdbuf() const
+    { return const_cast<__filebuf_type*>(&_M_filebuf); }
+
+    bool is_open()
+    { return _M_filebuf.is_open(); }
+
+    int fd()
+    { return _M_filebuf.fd(); }
+
+    std::__c_file* file()
+    { return _M_filebuf.file(); }
+};
+
+}
