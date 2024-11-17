@@ -1,0 +1,104 @@
+#pragma once
+
+/*
+This header is not stable. It might has bug.
+*/
+
+#include <string>
+#include <vector>
+#include <optional>
+#include <thread>
+#include <chrono>
+#include <fstream>
+
+#include <cstring>
+
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+
+#include "fdstream"
+
+struct Pipe {
+    Pipe() = default;
+    Pipe(const int arr[2]) : input(arr[0]), output(arr[1]) { }
+
+    int input, output;
+};
+
+struct ProcessStartInfo {
+    ProcessStartInfo() = default;
+    ProcessStartInfo(const std::string& path, bool env)
+    : ProcessPath(path), UsePathEnv(env) { }
+
+    bool
+        RedirectStandardOutput = false,
+        RedirectStandardInput = false,
+        RedirectStandardError = false;
+    bool UsePathEnv = false;
+    std::optional<std::string> ProcessName;
+    std::string ProcessPath;
+    std::vector<std::string> Arguments;
+};
+
+class Process {
+public:
+    using DateTime = std::chrono::time_point<std::chrono::system_clock>;
+
+private:
+    Process(const Process&) = delete;
+
+public:
+    Process() : _inp(nullptr), _out(nullptr), _err(nullptr) { }
+    Process(Process&&) = default;
+    Process(const ProcessStartInfo& _info) : Process() { info = _info; }
+    Process(const std::string& path, bool env = false)
+        : Process(ProcessStartInfo(path, env)) { }
+
+    ~Process();
+
+private:
+    ProcessStartInfo info;
+
+    pid_t pid;
+    int in[2], out[2], err[2];
+    Pipe _pin, _pout, _perr;
+    std::ofdstream *_inp;
+    std::ifdstream *_out, *_err;
+
+    std::thread wait_thread;
+
+    bool fail = false; std::string reason;
+    int _exc, _sig, _stat;
+    DateTime _stt, _ext = {};
+
+private:
+    void _wait_proc();
+    void _close_fd();
+
+public:
+    int                     ExitCode      () const { return this->_exc; }
+    int                     ExitSignal    () const { return this->_sig; }
+    DateTime                ExitTime      () const { return this->_ext; }
+    bool                    HasExited     () const { return this->_ext != DateTime(); }
+    int                     ProcessId     () const { return pid; }
+    std::string             ProcessName   () const { return this->info.ProcessName.value_or(this->info.ProcessPath); }
+    const ProcessStartInfo& StartInfo     () const { return this->info; }
+    DateTime                StartTime     () const { return this->_stt; }
+    const Pipe&             GetStdInPipe  () const { return _pin ; }
+    const Pipe&             GetStdOutPipe () const { return _pout; }
+    const Pipe&             GetStdErrPipe () const { return _perr; }
+    std::ofdstream&         GetStdIn      () const { return *_inp; }
+    std::ifdstream&         GetStdOut     () const { return *_out; }
+    std::ifdstream&         GetStdErr     () const { return *_err; }
+
+    void Kill ();
+    void Start();
+    void Wait () { wait_thread.join(); }
+
+public:
+    static Process Start(const std::string& path, bool env = false)
+    { Process p(path, env); p.Start(); return p; }
+    static Process Start(const ProcessStartInfo& info)
+    { Process p(info); p.Start(); return p; }
+};
