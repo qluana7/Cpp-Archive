@@ -1,0 +1,66 @@
+#pragma once
+
+#include <string>
+#include <numeric>
+#include <vector>
+#include <sstream>
+#include <functional>
+#include <type_traits>
+
+#include <cstddef>
+
+class string_utils {
+private:
+    template <typename ForwardIterator>
+    using StringTemplate = typename std::enable_if_t<std::is_same<typename std::iterator_traits<ForwardIterator>::value_type, std::string>::value>;
+
+public:
+    template <typename Predicate>
+    inline static std::size_t find_not_if(const std::string& src, Predicate pred) {
+        std::string::const_iterator b = src.cbegin(), e = src.cend();
+        std::size_t pos = 0;
+
+        for (; b != e && pred(*b); b++, pos++);
+
+        return pos;
+    }
+
+    template <typename Predicate>
+    inline static std::size_t rfind_not_if(const std::string& src, Predicate pred) {
+        std::string::const_reverse_iterator b = src.crbegin(), e = src.crend();
+        std::size_t pos = src.size();
+
+        for (; b != e && pred(*b); b++, pos--);
+
+        return pos;
+    }
+
+    template <typename ForwardIterator, typename = StringTemplate<ForwardIterator>>
+    inline static std::string join(ForwardIterator b, ForwardIterator e, const std::string& delim = "")
+    { return std::accumulate(std::next(b), e, *b, [&delim](const std::string& a, const std::string& b) { return a + delim + b; }); }
+
+    template <typename ForwardIterator>
+    inline static std::string join(ForwardIterator b, ForwardIterator e, const std::function<std::string (const typename std::iterator_traits<ForwardIterator>::value_type&)>& conv, const std::string& delim = "") {
+        using T = typename std::iterator_traits<ForwardIterator>::value_type;
+        return std::accumulate(std::next(b), e, conv(*b), [&delim, &conv](const std::string& r, const T& v) { return r + delim + conv(v); });
+    }
+
+    template <typename ForwardIterator, typename = StringTemplate<ForwardIterator>>
+    inline static size_t split(const std::string& src, ForwardIterator dest, char delim)
+    { std::vector<std::string> v; split(src, v, delim); std::copy(v.begin(), v.end(), dest.begin()); return v.size(); }
+
+    inline static void split(const std::string& src, std::vector<std::string>& dest, char delim)
+    { std::stringstream ss(src); for (std::string s; std::getline(ss, s, delim); dest.push_back(s)); }
+
+    inline static bool empty_or_space(const std::string& src)
+    { return std::all_of(src.begin(), src.end(), (int (*)(int))std::isspace); }
+
+    inline static std::string ltrim(const std::string& src)
+    { return src.substr(find_not_if(src, (int (*)(int))std::isspace)); }
+
+    inline static std::string rtrime(const std::string& src)
+    { return src.substr(0, rfind_not_if(src, (int (*)(int))std::isspace)); }
+
+    inline static std::string trim(const std::string& src)
+    { return ltrim(rtrime(src)); }
+};
