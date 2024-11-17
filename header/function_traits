@@ -1,0 +1,26 @@
+#pragma once
+
+#include <cstddef>
+#include <tuple>
+#include <functional>
+
+namespace std {
+
+template <typename T>
+struct function_traits;
+
+template <typename _Ret, typename ..._Args>
+struct function_traits<std::function<_Ret (_Args...)>> {
+    typedef std::size_t size_type;
+
+    static constexpr size_type args_size = sizeof...(_Args);
+
+    typedef _Ret return_type;
+
+    template <size_type _Index>
+    struct Arg {
+        typedef typename std::tuple_element<_Index, std::tuple<_Args...>>::type type;
+    };
+};
+
+}
