@@ -47,7 +47,7 @@ public:
 
     template <typename ForwardIterator, typename = StringTemplate<ForwardIterator>>
     inline static size_t split(const std::string& src, ForwardIterator dest, char delim)
-    { std::vector<std::string> v; split(src, v, delim); std::copy(v.begin(), v.end(), dest.begin()); return v.size(); }
+    { std::vector<std::string> v; split(src, v, delim); std::copy(v.begin(), v.end(), dest); return v.size(); }
 
     inline static void split(const std::string& src, std::vector<std::string>& dest, char delim)
     { std::stringstream ss(src); for (std::string s; std::getline(ss, s, delim); dest.push_back(s)); }
