@@ -1,0 +1,50 @@
+#pragma once
+
+#include <iterator>
+
+/*
+Example to use
+
+for (int x : Range<int, 1, 5>{}) {
+    std::cout << x;
+}
+
+Output : 12345
+*/
+
+template <typename T, T _BeginValue, T _EndValue>
+struct Range {
+    class RangeIterator :
+        public std::iterator<
+            std::random_access_iterator_tag,
+            T, std::size_t, const T*, T
+            > {
+        T _value;
+
+    public:
+        explicit RangeIterator(T __v) : _value(__v) {};
+
+        constexpr RangeIterator& operator++(   ) { this->_value++; return *this; }
+        constexpr RangeIterator  operator++(int) { RangeIterator ret = *this; ++(*this); return ret; }
+        constexpr RangeIterator& operator--(   ) { this->_value--; return *this; }
+        constexpr RangeIterator  operator--(int) { RangeIterator ret = *this; --(*this); return ret; }
+
+        constexpr RangeIterator& operator+=(std::size_t __v) { this->_value += __v; return *this; }
+        constexpr RangeIterator& operator-=(std::size_t __v) { this->_value -= __v; return *this; }
+
+        constexpr RangeIterator  operator+ (std::size_t __v) { return RangeIterator(static_cast<T>(this->_value + __v)); } 
+        constexpr RangeIterator  operator- (std::size_t __v) { return RangeIterator(static_cast<T>(this->_value - __v)); }
+        
+        constexpr bool operator==(const RangeIterator& __iter) const { return _value == __iter._value; }
+        constexpr bool operator!=(const RangeIterator& __iter) const { return !(*this == __iter); }
+
+        constexpr T operator*() const { return this->_value; }
+    };
+
+private:
+    T _begin = _BeginValue, _end = _EndValue;
+
+public:
+    constexpr RangeIterator begin() const { return RangeIterator(_begin); }
+    constexpr RangeIterator end()   const { return std::next(RangeIterator(_end)); }
+};

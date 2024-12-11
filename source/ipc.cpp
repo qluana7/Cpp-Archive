@@ -1,4 +1,4 @@
-#include "ipc"
+#include "header/ipc"
 
 #define exec(env) ((env) ? execvp : execv)
 
@@ -41,10 +41,13 @@ void Process::Start() {
     if (this->info.RedirectStandardOutput && pipe(this->out) < 0) FAIL("Failed to open StandardOutput.");
     if (this->info.RedirectStandardError  && pipe(this->err) < 0) FAIL("Failed to open StandardError." );
 
-    if (this->info.RedirectStandardInput ) { this->_pin  = Pipe(this->in ); _inp = new std::ofdstream(this->in [1]); }
-    if (this->info.RedirectStandardOutput) { this->_pout = Pipe(this->out); _out = new std::ifdstream(this->out[0]); }
-    if (this->info.RedirectStandardError ) { this->_perr = Pipe(this->err); _err = new std::ifdstream(this->err[0]); }
+    if (this->info.RedirectStandardInput ) { this->_pin  = Pipe(this->in ); this->_inp = new std::ofdstream(this->in [1]); }
+    if (this->info.RedirectStandardOutput) { this->_pout = Pipe(this->out); this->_out = new std::ifdstream(this->out[0]); }
+    if (this->info.RedirectStandardError ) { this->_perr = Pipe(this->err); this->_err = new std::ifdstream(this->err[0]); }
 
+    if (this->info.RedirectStandardInput && this->info.RedirectStandardOutput)
+    { this->_out->tie(_inp); }
+    
     this->pid = fork();
 
     if (pid < 0) FAIL("Failed to create process.");
