@@ -9,7 +9,7 @@
 
 #include <cstddef>
 
-class string_utils {
+class strlib {
 private:
     template <typename ForwardIterator>
     using StringTemplate = typename std::enable_if_t<std::is_same<typename std::iterator_traits<ForwardIterator>::value_type, std::string>::value>;
@@ -78,10 +78,10 @@ public:
     { return ltrim(rtrime(src)); }
 
     inline static std::string pad_left(const std::string& src, int cnt, char c)
-    { return std::string(std::max<int>(0, src.size() - cnt), c) + src; }
+    { return std::string(std::max<int>(0, cnt - src.size()), c) + src; }
 
     inline static std::string pad_right(const std::string& src, int cnt, char c)
-    { return src + std::string(std::max<int>(0, src.size() - cnt), c); }
+    { return src + std::string(std::max<int>(0, cnt - src.size()), c); }
 
     inline static bool startswith(const std::string& src, const std::string& pat)
     { return std::equal(pat.begin(), pat.end(), src.begin()); }
@@ -94,4 +94,21 @@ public:
 
     inline static std::string tolower(const std::string& src)
     { std::string ret(src); for (auto& c : ret) c = std::tolower(c); return ret; }
+
+    inline static bool try_parse(int& dest, const std::string& src, int base = 10) {
+        try {
+            size_t idx;
+            dest = std::stoi(src, &idx, base);
+            return idx == src.size();
+        } catch (...) { return false; }
+    }
+
+    inline static bool is_digit(const std::string& src)
+    { return std::all_of(src.begin(), src.end(), (int (*)(int))std::isdigit); }
+
+    inline static bool is_alpha(const std::string& src)
+    { return std::all_of(src.begin(), src.end(), (int (*)(int))std::isalpha); }
+
+    inline static bool is_alnum(const std::string& src)
+    { return std::all_of(src.begin(), src.end(), (int (*)(int))std::isalnum); }
 };
