@@ -1,0 +1,46 @@
+#pragma once
+
+#include <type_traits>
+
+namespace enum_operator {
+#define __ENUM_OPERATOR_ENABLE__(OP) \
+    typename = std::void_t<decltype(std::declval<T>() OP std::declval<T>())>
+
+#define __ENUM_TEMPLATE__ \
+template< \
+    typename _Enum, \
+    typename T = std::underlying_type_t<_Enum>, \
+    typename = std::enable_if_t<std::is_enum_v<_Enum>, void> \
+>
+
+#define __ENUM_OPERATOR_TEMPLATE__(OP) \
+template< \
+    typename _Enum, \
+    typename T = std::underlying_type_t<_Enum>, \
+    typename = std::enable_if_t<std::is_enum_v<_Enum>, void>, \
+    __ENUM_OPERATOR_ENABLE__(OP) \
+>
+
+__ENUM_OPERATOR_TEMPLATE__(|) constexpr _Enum operator|(_Enum __this, _Enum __flag)
+{ return static_cast<_Enum>(static_cast<T>(__this) | static_cast<T>(__flag)); }
+
+__ENUM_OPERATOR_TEMPLATE__(&) constexpr _Enum operator&(_Enum __this, _Enum __flag)
+{ return static_cast<_Enum>(static_cast<T>(__this) & static_cast<T>(__flag)); }
+
+__ENUM_OPERATOR_TEMPLATE__(^) constexpr _Enum operator^(_Enum __this, _Enum __flag)
+{ return static_cast<_Enum>(static_cast<T>(__this) ^ static_cast<T>(__flag)); }
+
+__ENUM_OPERATOR_TEMPLATE__(|) constexpr _Enum& operator|=(_Enum& __this, _Enum __flag)
+{ return __this = __this | __flag; }
+
+__ENUM_OPERATOR_TEMPLATE__(&) constexpr _Enum& operator&=(_Enum& __this, _Enum __flag)
+{ return __this = __this & __flag; }
+
+__ENUM_OPERATOR_TEMPLATE__(^) constexpr _Enum& operator^=(_Enum& __this, _Enum __flag)
+{ return __this = __this ^ __flag; }
+
+#undef __ENUM_OPERATOR_ENABLE__
+#undef __ENUM_OPERATOR_TEMPLATE__
+#undef __ENUM_TEMPLATE__
+
+}
