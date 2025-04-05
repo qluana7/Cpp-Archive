@@ -36,7 +36,7 @@ public:
     }
 
     template <typename ForwardIterator, typename = StringTemplate<ForwardIterator>>
-    inline static std::string join(ForwardIterator b, ForwardIterator e, const std::string& delim = "")
+    inline static std::string&& join(ForwardIterator b, ForwardIterator e, const std::string& delim = "")
     { if (b == e) return ""; return std::accumulate(std::next(b), e, *b, [&delim](const std::string& a, const std::string& b) { return a + delim + b; }); }
 
     template <typename ForwardIterator>
@@ -47,13 +47,16 @@ public:
     }
 
     template <typename ForwardIterator, typename = StringTemplate<ForwardIterator>>
+    [[ deprecated ]]
     inline static size_t split(const std::string& src, ForwardIterator dest, char delim)
-    { std::vector<std::string> v; split(src, v, delim); std::copy(v.begin(), v.end(), dest); return v.size(); }
+    { size_t c = 0; std::stringstream ss(src); for (std::string s; std::getline(ss, s, delim); c++, dest++) *dest = s; return c; }
 
+    [[ deprecated ]]
     inline static void split(const std::string& src, std::vector<std::string>& dest, char delim)
     { std::stringstream ss(src); for (std::string s; std::getline(ss, s, delim); dest.push_back(s)); }
 
     template <typename _OutT, typename _UnaryOperation>
+    [[ deprecated ]]
     inline static std::vector<_OutT> split_map(const std::string& __src, _UnaryOperation __unary_op, char __delim) {
         std::stringstream ss(__src);
         std::vector<_OutT> v;
@@ -63,6 +66,30 @@ public:
             v.push_back(__unary_op(s));
 
         return v;
+    }
+
+    template <typename _Container>
+    inline static _Container split(const std::string& __src, char __delim) {
+        std::stringstream ss(__src);
+        _Container ct; auto iter = std::back_inserter(ct);
+        std::string s;
+
+        while (getline(ss, s, __delim))
+            iter = s;
+
+        return ct;
+    }
+
+    template <typename _Container, typename _UnaryOp>
+    inline static _Container split_map(const std::string& __src, char __delim, _UnaryOp __unary_op) {
+        std::stringstream ss(__src);
+        _Container ct; auto iter = std::back_inserter(ct);
+        std::string s;
+
+        while (std::getline(ss, s, __delim))
+            iter = __unary_op(s);
+
+        return ct;
     }
 
     inline static bool empty_or_space(const std::string& src)
