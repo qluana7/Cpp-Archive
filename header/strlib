@@ -36,14 +36,27 @@ public:
     }
 
     template <typename ForwardIterator, typename = StringTemplate<ForwardIterator>>
-    inline static std::string&& join(ForwardIterator b, ForwardIterator e, const std::string& delim = "")
-    { if (b == e) return ""; return std::accumulate(std::next(b), e, *b, [&delim](const std::string& a, const std::string& b) { return a + delim + b; }); }
+    inline static std::string join(ForwardIterator b, ForwardIterator e, const std::string& delim = "") {
+        if (b == e) return "";
+
+        std::string output = *b;
+
+        for (b++; b != e; b++)
+            output += delim + *b;
+        
+        return output;
+    }
 
     template <typename ForwardIterator>
     inline static std::string join(ForwardIterator b, ForwardIterator e, std::function<std::string (const typename std::iterator_traits<ForwardIterator>::value_type&)> conv, const std::string& delim = "") {
-        using T = typename std::iterator_traits<ForwardIterator>::value_type;
         if (b == e) return "";
-        return std::accumulate(std::next(b), e, conv(*b), [&delim, &conv](const std::string& r, const T& v) { return r + delim + conv(v); });
+
+        std::string output = conv(*b);
+
+        for (b++; b != e; b++)
+            output += delim + conv(*b);
+
+        return output;
     }
 
     template <typename ForwardIterator, typename = StringTemplate<ForwardIterator>>
@@ -90,6 +103,32 @@ public:
             iter = __unary_op(s);
 
         return ct;
+    }
+
+    template <typename _UnaryFunc>
+    inline static void split_foreach(const std::string& __src, char __delim, _UnaryFunc __unary_func) {
+        std::stringstream ss(__src);
+        std::string s;
+
+        while (std::getline(ss, s, __delim))
+            __unary_func(s);
+    }
+
+    // Remove character if predict return false.
+    template <typename _UnaryPred>
+    inline static std::string strrmv(const std::string& __src, _UnaryPred __unary_pred) {
+        std::string r; r.resize(__src.size());
+
+        std::size_t i = 0;
+        for (auto c : __src) {
+            if (!__unary_pred(c)) continue;
+
+            r[i] = c; i++;
+        }
+
+        r.resize(i);
+
+        return r;
     }
 
     inline static bool empty_or_space(const std::string& src)
