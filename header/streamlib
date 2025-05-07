@@ -1,0 +1,26 @@
+#include <istream>
+
+/**
+ * @brief Ignores input of a specific type from the input stream.
+ * 
+ * This function template allows you to skip input of a specific type `T` 
+ * from the input stream, similar to the `*` functionality in `scanf` 
+ * The function reads an input of type `T` from the stream
+ * but discards it without storing it anywhere.
+ * 
+ * @tparam T The type of input to ignore.
+ * @tparam _CharT The character type of the stream (e.g., `char` or `wchar_t`).
+ * @tparam _Traits The character traits type of the stream.
+ * @param __os The input stream to read from.
+ * @return A reference to the input stream after ignoring the input.
+ * 
+ * @example
+ * std::istringstream iss("42 hello");
+ * std::string word;
+ * iss >> ignoreT<int> // Ignores the integer 42 from the stream.
+ *     >> word;        // Reads "hello" into the string variable.
+ */
+template <typename T, typename _CharT, typename _Traits>
+std::basic_istream<_CharT, _Traits>&
+ignoreT(std::basic_istream<_CharT, _Traits>& __os)
+{ return __os >> *(new T); }
