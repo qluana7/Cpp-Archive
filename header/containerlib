@@ -1,0 +1,83 @@
+#pragma once
+
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <type_traits>
+#include <exception>
+
+#include "header/strlib"
+
+namespace vectorlib {
+
+template <typename T>
+struct is_vector : false_type {};
+
+template <typename T, typename U>
+struct is_vector<std::vector<T, U>> : true_type {};
+
+template <typename T>
+struct extract_vector {
+    using type = T;
+};
+
+template <typename T, typename U>
+struct extract_vector<std::vector<T, U>> {
+    using type = typename extract_vector<T>::type;
+};
+
+struct not_implemented : public std::exception {};
+
+template <typename T>
+T convert(const std::string& s) {
+    if constexpr (std::is_integral<T>::value) {
+        if constexpr (std::is_signed<T>::value)
+            return (T)std::stoll(s);
+        else
+            return (T)std::stoull(s);
+    } else if constexpr (std::is_floating_point<T>::value)
+        return (T)std::stold(s);
+    else if constexpr (std::is_same<T, std::string>::value)
+        return s.substr(1, s.size() - 2);
+    
+    throw not_implemented{};
+}
+
+template <typename T, typename _UnaryFunc>
+std::vector<T> __to_vector(std::stringstream& ss, _UnaryFunc func) {
+    char c; std::vector<T> v;
+    ss >> c;
+    if (c != '[') throw std::invalid_argument("Type missmatch");
+
+    if constexpr (is_vector<T>::value) {
+        using U = typename T::value_type;
+
+        do {
+            v.push_back(__to_vector<U>(ss, func));
+        } while (ss >> c, c == ',');
+    } else {
+        std::string s; getline(ss, s, ']');
+        std::stringstream tk(s);
+        while (std::getline(tk, s, ','))
+            v.push_back(func(strlib::trim(s)));
+    }
+
+    return v;
+}
+
+template <typename T>
+std::vector<T> to_vector(const std::string& __s) {
+    std::stringstream ss(__s);
+
+    return __to_vector<T>(ss, convert<typename extract_vector<T>::type>);
+}
+
+template <typename T, typename _UnaryFunc>
+std::vector<T> to_vector(const std::string& __s, _UnaryFunc __func) {
+    std::stringstream ss(__s);
+
+    return __to_vector<T>(ss, __func);
+}
+
+}

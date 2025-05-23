@@ -1,4 +1,6 @@
 #include <istream>
+#include <utility>
+#include <type_traits>
 
 /**
  * @brief Ignores input of a specific type from the input stream.
@@ -20,7 +22,52 @@
  * iss >> ignoreT<int> // Ignores the integer 42 from the stream.
  *     >> word;        // Reads "hello" into the string variable.
  */
-template <typename T, typename _CharT, typename _Traits>
+template <typename T, typename _CharT, typename _Traits
+#if __cplusplus >= 202002L
+>
+requires default_initializable<T> &&
+requires(std::basic_istream<_CharT, _Traits> is, T t) { is >> t; }
+#elif __cplusplus >= 201703L
+,
+typename = typename std::enable_if_t<std::is_default_constructible<T>::value>,
+typename = typename std::void_t<decltype(std::declval<std::basic_istream<_CharT, _Traits>>() >> std::declval<T&>())>
+>
+#else
+>
+#endif
 std::basic_istream<_CharT, _Traits>&
 ignoreT(std::basic_istream<_CharT, _Traits>& __os)
-{ return __os >> *(new T); }
+{ T _; return __os >> _; }
+
+template <typename _InitFunc>
+struct _IgnoreT { _InitFunc f; };
+
+template <typename _InitFunc, typename _CharT, typename _Traits>
+std::basic_istream<_CharT, _Traits>&
+operator>>(std::basic_istream<_CharT, _Traits>& __os, _IgnoreT<_InitFunc> __t)
+{ auto _ = __t.f(); return __os >> _; }
+
+/**
+ * @brief Ignores input from the input stream using a custom initializer function.
+ * 
+ * This function template allows you to skip input from the input stream by 
+ * specifying a custom initializer function that generates the type to be ignored.
+ * The function reads an input of the type returned by the initializer function 
+ * from the stream but discards it without storing it anywhere.
+ * 
+ * @tparam _InitFunc The type of the initializer function.
+ * @tparam _CharT The character type of the stream (e.g., `char` or `wchar_t`).
+ * @tparam _Traits The character traits type of the stream.
+ * @param __os The input stream to read from.
+ * @param __func The initializer function to generate the type to ignore.
+ * @return A reference to the input stream after ignoring the input.
+ * 
+ * @example
+ * std::istringstream iss("42 hello");
+ * std::string word;
+ * iss >> ignoreT([] { return int(); }) // Ignores the integer 42 from the stream.
+ *     >> word;                         // Reads "hello" into the string variable.
+ */
+template <typename _InitFunc>
+inline _IgnoreT<_InitFunc> ignoreT(_InitFunc __func)
+{ return { __func }; }

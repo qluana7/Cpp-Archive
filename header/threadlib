@@ -1,0 +1,401 @@
+#include <vector>
+#include <queue>
+#include <map>
+#include <unordered_map>
+#include <functional>
+#include <algorithm>
+#include <type_traits>
+#include <chrono>
+#include <thread>
+#include <future>
+
+#include <cstdint>
+
+namespace threadlib {
+
+/**
+ * @struct event_args
+ * @brief An empty struct used as a default argument type for events.
+ *
+ * This struct can be used when no additional data needs to be passed
+ * to event handlers. The static member `empty` provides a convenient
+ * default instance.
+ * 
+ * 
+ */
+struct event_args { static const event_args empty; };
+
+/**
+ * @enum event_policy
+ * @brief Specifies how event handlers are invoked.
+ *
+ * The policy enum determines whether event handlers are called synchronously or asynchronously.
+ */
+enum class event_policy {
+    /**
+     * @brief Handlers are invoked synchronously.
+     * 
+     * This policy ensures that all handlers are executed in the order they were added.
+     * The calling thread will block until all handlers have completed.
+     */
+    sync,
+    /**
+     * @brief Handlers are invoked asynchronously.
+     * 
+     * This policy allows handlers to run in parallel, potentially
+     * improving performance for long-running tasks. However, it does
+     * not guarantee the order of execution.
+     * 
+     * @bug This policy cannot catch exceptions thrown by the handlers.
+     * 
+     * @note This policy does not wait for any running event handlers.
+     *       When removing a handler, it is recommended to call `wait()`
+     *       before calling this function to ensure all handlers have completed.
+     */
+    async
+};
+
+/**
+ * @class event
+ * @brief A class that represents an event with a set of handlers.
+ *
+ * The Event class allows you to register handlers that will be called when the event is raised.
+ * Handlers can be invoked synchronously or asynchronously, depending on the event policy.
+ *
+ * @tparam _ArgT The type of the event arguments. Default is `event_args`.
+ */
+template <typename _ArgT = event_args>
+class event {
+public:
+    /**
+     * @brief Default constructor for the event class.
+     * 
+     * This constructor initializes the event with a default policy (synchronous).
+     */
+    event() = default;
+
+    event(const event&) = delete;
+    event(event&&) = delete;
+
+    /**
+     * @brief Constructs an event with the specified policy.
+     * 
+     * This constructor initializes the event with the given event policy.
+     * 
+     * @param __p The event policy (synchronous or asynchronous).
+     */
+    event(event_policy __p) : _M_policy(__p) { }
+
+    /**
+     * @brief Destructor for the event class.
+     * 
+     * This destructor waits for all asynchronous event handlers to complete
+     * before destroying the event object.
+     */
+    ~event() { wait(); clear(); }
+
+public:
+    typedef _ArgT event_args_type;
+    typedef std::function<void (void*, event_args_type args)> handler_type;
+    typedef uint64_t handler_id_type;
+
+private:
+    event_policy _M_policy = event_policy::sync;
+
+    handler_id_type _M_id = 0;
+    std::unordered_map<void*, int> _M_id_map;
+    std::map<int, handler_type> _M_handler_map;
+
+    std::queue<std::vector<std::future<void>>> _M_workers;
+
+public:
+    /**
+     * @brief Clears all registered event handlers.
+     * 
+     * This function clears all registered event handlers and resets the event ID.
+     * 
+     */
+    void clear() {
+        _M_id_map.clear();
+        _M_handler_map.clear();
+        _M_workers = {};
+        _M_id = 0;
+    }
+
+    /**
+     * @brief Raises the event and invokes all registered handlers.
+     * 
+     * This function raises the event and invokes all registered event handlers
+     * with the specified sender and event arguments. The invocation is done
+     * according to the event policy (synchronous or asynchronous).
+     * 
+     * @param sender The sender of the event.
+     * @param e The event arguments.
+     */
+    void raise(void* sender, event_args_type e) {
+        if (_M_policy == event_policy::sync)
+            __raise_sync(sender, e);
+        else
+            __raise_async(sender, e);
+    }
+
+    /**
+     * @brief Waits for all asynchronous event handlers to complete.
+     * 
+     * This function blocks the calling thread until all asynchronous
+     * event handlers have completed their execution.
+     */
+    void wait() {
+        while (!_M_workers.empty()) {
+            auto v = std::move(_M_workers.front());
+            _M_workers.pop();
+
+            for (auto& w : v)
+                if (w.valid()) w.wait();
+        }
+    }
+
+    /**
+     * @brief Adds a handler to the event with id.
+     * 
+     * This function adds a handler to the event and returns its ID.
+     * This function allows temporary objects to be passed as handlers.
+     * Also, it allows the handler to be passed as a reference.
+     * 
+     * @param __handler The handler to add.
+     * @return The ID of the added handler.
+     */
+    template <typename Handler>
+    handler_id_type add_handler(Handler __handler) & {
+        _M_id_map[&__handler] = _M_id;
+        _M_handler_map[_M_id] = handler_type(__handler);
+
+        _M_id++;
+
+        return _M_id - 1;
+    }
+
+    /**
+     * @brief Removes a handler from the event with id.
+     * 
+     * This function removes a handler from the event with the specified ID.
+     * 
+     * @param id The ID of the handler to remove.
+     * 
+     * @note This function does not check if the ID is valid.
+     *       It is the caller's responsibility to ensure that the ID is valid.
+     *       If the ID is invalid, the function will do nothing.
+     *       Use only ID that was returned by `add_handler()`.
+     */
+    void remove_handler(handler_id_type id) & {
+        auto __handler = 
+            std::find_if(_M_id_map.begin(), _M_id_map.end(), [id] (const auto& p) {
+                return p.second == id;
+            });
+        
+        if (__handler == _M_id_map.end()) return;
+
+        _M_handler_map.erase(id);
+        _M_id_map.erase(__handler);
+    }
+
+private:
+    void __raise_sync(void* sender, event_args_type e) {
+        for (auto& [_, h] : _M_handler_map)
+            h(sender, e);
+    }
+
+    void __raise_async(void* sender, event_args_type e) {
+        std::vector<std::future<void>> v;
+
+        for (auto& [_, h] : _M_handler_map)
+            v.push_back(std::async(std::launch::async, h, sender, e));
+
+        _M_workers.push(std::move(v));
+    }
+
+    template <typename Handler>
+    void* __get_handler_ptr(Handler& __handler) {
+        if constexpr (std::is_function_v<std::remove_pointer_t<std::decay_t<Handler>>>)
+            return reinterpret_cast<void*>(+__handler);
+        else
+            return static_cast<void*>(&__handler);
+    }
+
+public:
+    /**
+     * @brief Registers an event handler.
+     *
+     * Adds the given handler to the event. The handler must be a callable object
+     * (such as a function pointer, functor, or lambda). Note that handler removal
+     * (`operator-=`) will only work if the same handler object is passed; temporary
+     * (unnamed) objects cannot be removed.
+     *
+     * @note This operator can only be used on lvalue event objects (not temporaries),
+     *       which helps prevent accidental misuse.
+     *
+     * @tparam Handler The type of the handler to register.
+     * @param handler The handler to add.
+     * @return Reference to this event object.
+     */
+    template <typename Handler>
+    [[ deprecated(
+        "Registering handlers on temporary event objects is dangerous. "
+        "Cannot unregister handler with operator-=. "
+        "Use `add_handler` and `remove_handler` instead."
+    ) ]]
+    event& operator+=(Handler&& __handler) &
+    { return operator+=(__handler); }
+
+    template <typename Handler>
+    event& operator-=(Handler&&) & = delete;
+
+    /**
+     * @brief Registers an event handler.
+     *
+     * Adds the given handler to the event. The handler must be a callable object
+     * (such as a function pointer, functor, or lambda). Note that handler removal
+     * (`operator-=`) will only work if the same handler object is passed; temporary
+     * (unnamed) objects cannot be removed.
+     *
+     * @note This operator can only be used on lvalue event objects (not temporaries),
+     *       which helps prevent accidental misuse.
+     *
+     * @tparam Handler The type of the handler to register.
+     * @param handler The handler to add.
+     * @return Reference to this event object.
+     */
+    template <typename Handler>
+    event& operator+=(Handler& __handler) & {
+        void* __handler_ptr = __get_handler_ptr(__handler);
+
+        _M_id_map[__handler_ptr] = _M_id;
+        _M_handler_map[_M_id] = handler_type(__handler);
+
+        _M_id++;
+
+        return *this;
+    }
+
+    /**
+     * @brief Unregisters an event handler.
+     *
+     * Removes the given handler from the event. The handler must be a callable object
+     * (such as a function pointer, functor, or lambda). Note that handler removal
+     * will only work if the same handler object is passed; temporary
+     * (unnamed) objects cannot be removed.
+     *
+     * @note This operator can only be used on lvalue event objects (not temporaries),
+     *       which helps prevent accidental misuse.
+     *
+     * @tparam Handler The type of the handler to unregister.
+     * @param handler The handler to remove.
+     * @return Reference to this event object.
+     */
+    template <typename Handler>
+    event& operator-=(Handler& __handler) & {
+        void* __handler_ptr = __get_handler_ptr(__handler);
+
+        handler_id_type _id = _M_id_map.extract(__handler_ptr).mapped();
+        _M_handler_map.erase(_id);
+
+        return *this;
+    }
+
+    event& operator=(const event&) = delete;
+    event& operator=(event&&) = delete;
+};
+
+#if __cplusplus >= 202002L
+/**
+ * @class timer
+ * @brief A timer class that periodically raises an event at a specified interval.
+ *
+ * The Timer class provides functionality to start and stop a timer that triggers
+ * an `Elapsed` event at regular intervals. The timer can operate in either synchronous
+ * or asynchronous mode, depending on the constructor parameter.
+ *
+ * @note Copy and move operations are deleted to ensure unique timer ownership.
+ */
+class timer {
+public:
+    using time_type = std::chrono::milliseconds;
+
+    /**
+     * @brief Create new timer object.
+     * 
+     * Constructs a Timer object with the specified interval and mode.
+     * 
+     * @param __interval The interval between timer events.
+     * @param __async Whether to run event handlers asynchronously.
+     */
+    timer(time_type __interval, bool __async = false)
+    : _M_interval(__interval),
+      Elapsed(__async ? event_policy::async : event_policy::sync) { }
+
+    timer(const timer&) = delete;
+    timer(timer&&) = delete;
+
+private:
+    time_type _M_interval;
+
+    std::jthread _M_timer;
+
+    bool _M_raise_last;
+
+public:
+    event<event_args> Elapsed;
+
+    /**
+     * @brief Start the timer.
+     * 
+     * Starts the timer and periodically raises the `Elapsed` event
+     * at the specified interval. If asynchronous mode is enabled,
+     * the event handlers are invoked asynchronously.
+     */
+    void start() {
+        _M_timer = std::jthread([this] (std::stop_token tk) {
+            while (true) {
+                std::this_thread::sleep_for(this->_M_interval);
+                
+                if (!this->_M_raise_last && tk.stop_requested()) return;
+
+                this->Elapsed.raise(this, event_args::empty);
+
+                if (tk.stop_requested()) return;
+            }
+        });
+    }
+
+    /** 
+     * @brief Stops the timer as quickly as possible.
+     * 
+     * This function stops the timer as quickly as possible.
+     * It waits until all tasks in the event handler have finished,
+     * and waits until the next `Elapsed` event occurs.
+     * 
+     * @param __raise_next Whether to raise the next event handlers of `Elapsed`.
+     */
+    void stop(bool __raise_next = false) {
+        _M_raise_last = __raise_next;
+        _M_timer.request_stop();
+        _M_timer.join();
+        Elapsed.wait();
+        terminate();
+    }
+
+    /**
+     * @brief Terminates the timer.
+     * 
+     * This function stops the timer immediately.
+     * It ignores all tasks in the event handler,
+     * and destroys the timer object.
+     */
+    void terminate() { _M_timer = {}; }
+
+    timer& operator=(const timer&) = delete;
+    timer& operator=(timer&&) = delete;
+};
+#endif
+
+}
