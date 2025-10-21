@@ -44,8 +44,8 @@ T convert(const std::string& s) {
     throw not_implemented{};
 }
 
-template <typename T, typename _UnaryFunc>
-std::vector<T> __to_vector(std::stringstream& ss, _UnaryFunc func) {
+template <typename T, typename UnaryFunc>
+std::vector<T> f_to_vector(std::stringstream& ss, UnaryFunc func) {
     char c; std::vector<T> v;
     ss >> c;
     if (c != '[') throw std::invalid_argument("Type missmatch");
@@ -54,7 +54,7 @@ std::vector<T> __to_vector(std::stringstream& ss, _UnaryFunc func) {
         using U = typename T::value_type;
 
         do {
-            v.push_back(__to_vector<U>(ss, func));
+            v.push_back(f_to_vector<U>(ss, func));
         } while (ss >> c, c == ',');
     } else {
         std::string s; getline(ss, s, ']');
@@ -70,14 +70,14 @@ template <typename T>
 std::vector<T> to_vector(const std::string& __s) {
     std::stringstream ss(__s);
 
-    return __to_vector<T>(ss, convert<typename extract_vector<T>::type>);
+    return f_to_vector<T>(ss, convert<typename extract_vector<T>::type>);
 }
 
-template <typename T, typename _UnaryFunc>
-std::vector<T> to_vector(const std::string& __s, _UnaryFunc __func) {
+template <typename T, typename UnaryFunc>
+std::vector<T> to_vector(const std::string& __s, UnaryFunc __func) {
     std::stringstream ss(__s);
 
-    return __to_vector<T>(ss, __func);
+    return f_to_vector<T>(ss, __func);
 }
 
 }
