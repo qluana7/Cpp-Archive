@@ -282,5 +282,3 @@ public:
         return std::min(forward_distance(clk1, clk2), forward_distance(clk2, clk1));
     }
 };
-
-// Data check : https://www.acmicpc.net/problem/12840
